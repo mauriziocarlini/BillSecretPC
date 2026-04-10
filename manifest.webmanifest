@@ -1,11 +1,11 @@
 {
-  "name": "PyKHeX PWA",
-  "short_name": "PyKHeX",
-  "description": "Minimal PWA editor for PB7, PK8, PA8, PK9 and PA9 Pokemon files.",
+  "name": "Bill's secret PC",
+  "short_name": "Bill's PC",
+  "description": "Load a pkmn file, train it, profit.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#08111f",
-  "theme_color": "#0f172a",
+  "background_color": "#111215",
+  "theme_color": "#111215",
   "lang": "en",
   "icons": [
     {

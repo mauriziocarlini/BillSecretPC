@@ -1,4 +1,4 @@
-const CACHE_NAME = "pykhex-pwa-v7";
+const CACHE_NAME = "pykhex-pwa-v19";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const CORE_ASSETS = [
   "./assets/data/moves.json",
   "./assets/data/abilities.json",
   "./assets/data/move-legality-pkhex.json",
+  "./assets/data/ability-legality-pkhex.json",
   "./assets/data/growth-rates-pkhex.json",
 ];
 

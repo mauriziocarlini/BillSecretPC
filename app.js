@@ -169,8 +169,13 @@ const NATURES = [
   "Calm", "Gentle", "Sassy", "Careful", "Quirky",
 ];
 
+const NATURE_STATS = ["Atk", "Def", "Spe", "SpA", "SpD"];
+
 const EXPERIENCE_MIN_LEVEL = 1;
 const EXPERIENCE_MAX_LEVEL = 100;
+const MAX_STAT_POINTS = 32;
+const MAX_TOTAL_STAT_POINTS = 66;
+const POINT_TO_EV = [0, 4, 12, 20, 28, 36, 44, 52, 60, 68, 76, 84, 92, 100, 108, 116, 124, 132, 140, 148, 156, 164, 172, 180, 188, 196, 204, 212, 220, 228, 236, 244, 252];
 
 const FIRST_UNALIGNED_INTERNAL_9 = 917;
 const TABLE_9_INTERNAL_TO_NATIONAL = [
@@ -204,6 +209,7 @@ const appState = {
   moves: [],
   abilities: [],
   moveLegality: null,
+  abilityLegality: null,
   growthRates: null,
   speciesMap: new Map(),
   movesMap: new Map(),
@@ -219,7 +225,7 @@ const ui = {
   editorForm: document.querySelector("#editor-form"),
   statusBanner: document.querySelector("#status-banner"),
   pokemonName: document.querySelector("#pokemon-name"),
-  levelInput: document.querySelector("#level-input"),
+  pokemonLevel: document.querySelector("#pokemon-level"),
   evInputs: {
     hp: document.querySelector('[data-ev-input="hp"]'),
     atk: document.querySelector('[data-ev-input="atk"]'),
@@ -227,6 +233,14 @@ const ui = {
     spa: document.querySelector('[data-ev-input="spa"]'),
     spd: document.querySelector('[data-ev-input="spd"]'),
     spe: document.querySelector('[data-ev-input="spe"]'),
+  },
+  evValueLabels: {
+    hp: document.querySelector('[data-ev-value="hp"]'),
+    atk: document.querySelector('[data-ev-value="atk"]'),
+    def: document.querySelector('[data-ev-value="def"]'),
+    spa: document.querySelector('[data-ev-value="spa"]'),
+    spd: document.querySelector('[data-ev-value="spd"]'),
+    spe: document.querySelector('[data-ev-value="spe"]'),
   },
   evTotal: document.querySelector("#ev-total"),
   natureSelect: document.querySelector("#nature-select"),
@@ -249,15 +263,16 @@ async function bootstrap() {
   await Promise.all([loadDatasets(), registerServiceWorker()]);
   buildStaticUI();
   wireEvents();
-  setStatus("Ready. Load a Pokemon file to start editing.", "ok");
+  setStatus("", "");
 }
 
 async function loadDatasets() {
-  const [species, moves, abilities, moveLegality, growthRates] = await Promise.all([
+  const [species, moves, abilities, moveLegality, abilityLegality, growthRates] = await Promise.all([
     fetch("./assets/data/species.json").then((res) => res.json()),
     fetch("./assets/data/moves.json").then((res) => res.json()),
     fetch("./assets/data/abilities.json").then((res) => res.json()),
     fetch("./assets/data/move-legality-pkhex.json").then((res) => res.json()),
+    fetch("./assets/data/ability-legality-pkhex.json").then((res) => res.json()),
     fetch("./assets/data/growth-rates-pkhex.json").then((res) => res.json()),
   ]);
 
@@ -265,6 +280,7 @@ async function loadDatasets() {
   appState.moves = [{ id: 0, key: "none", name: "(None)" }, ...moves];
   appState.abilities = abilities;
   appState.moveLegality = moveLegality;
+  appState.abilityLegality = abilityLegality;
   appState.growthRates = growthRates;
   appState.speciesMap = new Map(species.map((entry) => [entry.id, entry]));
   appState.movesMap = new Map(appState.moves.map((entry) => [entry.id, entry]));
@@ -279,7 +295,7 @@ function buildStaticUI() {
   NATURES.forEach((name, index) => {
     const option = document.createElement("option");
     option.value = String(index);
-    option.textContent = `${name} (#${index})`;
+    option.textContent = formatNatureLabel(name, index);
     ui.natureSelect.append(option);
   });
 
@@ -296,6 +312,7 @@ function wireEvents() {
 
   Object.values(ui.evInputs).forEach((input) => {
     input.addEventListener("input", () => {
+      syncSpSliders(input.dataset.evInput);
       updateEvBadge();
       refreshSaveState();
     });
@@ -303,9 +320,8 @@ function wireEvents() {
 
   ui.abilityInput.addEventListener("change", refreshSaveState);
   ui.natureSelect.addEventListener("change", refreshSaveState);
-  ui.levelInput.addEventListener("input", refreshSaveState);
   ui.moveInputs.forEach((input) => input.addEventListener("change", () => {
-    syncLevelInputToRequiredMoves();
+    updateSummaryLevel();
     refreshSaveState();
   }));
   ui.editorForm.addEventListener("submit", (event) => {
@@ -398,10 +414,9 @@ function fillForm(fileState) {
   ui.pokemonName.textContent = parsed.speciesName;
 
   Object.entries(parsed.evs).forEach(([key, value]) => {
-    ui.evInputs[key].value = String(value);
+    ui.evInputs[key].value = String(pointsFromLegacyEv(value));
   });
 
-  ui.levelInput.value = String(parsed.level ?? EXPERIENCE_MIN_LEVEL);
   ui.natureSelect.value = String(parsed.natureId);
   renderAbilityOptions(parsed.abilityId);
   ui.abilityInput.value = String(parsed.abilityId);
@@ -413,7 +428,8 @@ function fillForm(fileState) {
     input.value = String(moveId);
   });
 
-  syncLevelInputToRequiredMoves();
+  updateSummaryLevel();
+  syncSpSliders();
   updateEvBadge();
   refreshSaveState();
 
@@ -427,8 +443,11 @@ function fillForm(fileState) {
 
 function updateEvBadge() {
   const total = getEvTotal();
-  ui.evTotal.textContent = `${total} / 510`;
-  ui.evTotal.classList.toggle("error", total > 510);
+  ui.evTotal.textContent = `${total} / ${MAX_TOTAL_STAT_POINTS} SP`;
+  ui.evTotal.classList.toggle("error", total > MAX_TOTAL_STAT_POINTS);
+  Object.entries(ui.evInputs).forEach(([key, input]) => {
+    ui.evValueLabels[key].textContent = String(clampPointsValue(input.value));
+  });
 }
 
 function refreshSaveState() {
@@ -438,10 +457,10 @@ function refreshSaveState() {
 function isFormValid() {
   if (!appState.loadedFile) return false;
   const total = getEvTotal();
-  if (total > 510) return false;
+  if (total > MAX_TOTAL_STAT_POINTS) return false;
 
   const evValues = Object.values(ui.evInputs).map((input) => Number.parseInt(input.value || "0", 10));
-  if (evValues.some((value) => Number.isNaN(value) || value < 0 || value > 252)) return false;
+  if (evValues.some((value) => Number.isNaN(value) || value < 0 || value > MAX_STAT_POINTS)) return false;
   const level = getDesiredLevel();
   if (level == null || level < EXPERIENCE_MIN_LEVEL || level > EXPERIENCE_MAX_LEVEL) return false;
   if (resolveAbilityValue() == null) return false;
@@ -520,17 +539,44 @@ function updateMoveOptions() {
 
 function collectEvs() {
   return {
-    hp: Number.parseInt(ui.evInputs.hp.value || "0", 10),
-    atk: Number.parseInt(ui.evInputs.atk.value || "0", 10),
-    def: Number.parseInt(ui.evInputs.def.value || "0", 10),
-    spa: Number.parseInt(ui.evInputs.spa.value || "0", 10),
-    spd: Number.parseInt(ui.evInputs.spd.value || "0", 10),
-    spe: Number.parseInt(ui.evInputs.spe.value || "0", 10),
+    hp: legacyEvFromPoints(ui.evInputs.hp.value),
+    atk: legacyEvFromPoints(ui.evInputs.atk.value),
+    def: legacyEvFromPoints(ui.evInputs.def.value),
+    spa: legacyEvFromPoints(ui.evInputs.spa.value),
+    spd: legacyEvFromPoints(ui.evInputs.spd.value),
+    spe: legacyEvFromPoints(ui.evInputs.spe.value),
   };
 }
 
 function getEvTotal() {
-  return Object.values(collectEvs()).reduce((sum, value) => sum + value, 0);
+  return Object.values(ui.evInputs).reduce((sum, input) => sum + clampPointsValue(input.value), 0);
+}
+
+function syncSpSliders(changedKey = "") {
+  if (changedKey) {
+    const input = ui.evInputs[changedKey];
+    const otherTotal = Object.entries(ui.evInputs).reduce((sum, [key, current]) => {
+      if (key === changedKey) return sum;
+      return sum + clampPointsValue(current.value);
+    }, 0);
+    const maxForChanged = Math.max(0, Math.min(MAX_STAT_POINTS, MAX_TOTAL_STAT_POINTS - otherTotal));
+    if (clampPointsValue(input.value) > maxForChanged) {
+      input.value = String(maxForChanged);
+    }
+  }
+
+  Object.entries(ui.evInputs).forEach(([key, input]) => {
+    const otherTotal = Object.entries(ui.evInputs).reduce((sum, [otherKey, current]) => {
+      if (otherKey === key) return sum;
+      return sum + clampPointsValue(current.value);
+    }, 0);
+    const maxForStat = Math.max(0, Math.min(MAX_STAT_POINTS, MAX_TOTAL_STAT_POINTS - otherTotal));
+    if (clampPointsValue(input.value) > maxForStat) {
+      input.value = String(maxForStat);
+    }
+    const fill = (clampPointsValue(input.value) / MAX_STAT_POINTS) * 100;
+    input.style.setProperty("--range-fill", `${fill}%`);
+  });
 }
 
 function buildQueryMap(entries) {
@@ -615,6 +661,16 @@ function getConservativeMoveEntries() {
   return Array.from(entries.values()).sort((a, b) => a.id - b.id);
 }
 
+function getLegalAbilityIds() {
+  if (!appState.loadedFile || !appState.abilityLegality) return null;
+  const { format, parsed } = appState.loadedFile;
+  return (
+    appState.abilityLegality[format.key]?.[`${parsed.speciesId}:${parsed.form}`] ??
+    appState.abilityLegality[format.key]?.[`${parsed.speciesId}:0`] ??
+    null
+  );
+}
+
 function normalizeQuery(value) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -623,19 +679,34 @@ function formatOptionLabel(entry) {
   return `${entry.name} (#${entry.id})`;
 }
 
+function formatDisplayLabel(entry) {
+  return entry.name;
+}
+
+function formatNatureLabel(name, index) {
+  const increased = Math.floor(index / 5);
+  const decreased = index % 5;
+  if (increased === decreased) {
+    return name;
+  }
+  return `${name} (+${NATURE_STATS[increased]}, -${NATURE_STATS[decreased]})`;
+}
+
 function renderAbilityOptions(selectedAbilityId = 0) {
-  const entries = [...appState.abilities];
-  if (selectedAbilityId && !appState.abilitiesMap.has(selectedAbilityId)) {
-    entries.unshift({ id: selectedAbilityId, name: `Unknown Ability ${selectedAbilityId}` });
+  const legalIds = getLegalAbilityIds();
+  const entries = (legalIds?.length ? legalIds : appState.abilities.map((entry) => entry.id))
+    .map((id) => appState.abilitiesMap.get(id) || { id, name: `Unknown Ability ${id}` });
+  if (selectedAbilityId && !entries.some((entry) => entry.id === selectedAbilityId)) {
+    entries.unshift(appState.abilitiesMap.get(selectedAbilityId) || { id: selectedAbilityId, name: `Unknown Ability ${selectedAbilityId}` });
   }
   ui.abilityInput.innerHTML = entries
-    .map((entry) => `<option value="${entry.id}">${formatOptionLabel(entry)}</option>`)
+    .map((entry) => `<option value="${entry.id}">${formatDisplayLabel(entry)}</option>`)
     .join("");
 }
 
 function renderMoveOptions(entries) {
   const rendered = entries
-    .map((entry) => `<option value="${entry.id}">${formatOptionLabel(entry)}</option>`)
+    .map((entry) => `<option value="${entry.id}">${formatDisplayLabel(entry)}</option>`)
     .join("");
   ui.moveInputs.forEach((input) => {
     input.innerHTML = rendered;
@@ -651,7 +722,7 @@ function ensureMoveOptionExists(moveId) {
     if (Array.from(input.options).some((option) => Number.parseInt(option.value, 10) === moveId)) return;
     const option = document.createElement("option");
     option.value = String(entry.id);
-    option.textContent = formatOptionLabel(entry);
+    option.textContent = formatDisplayLabel(entry);
     input.append(option);
   });
 }
@@ -663,8 +734,10 @@ function buildOutputName(fileName) {
 }
 
 function setStatus(message, tone = "") {
-  ui.statusBanner.textContent = message;
-  ui.statusBanner.className = `status${tone ? ` ${tone}` : ""}`;
+  if (!ui.statusBanner) return;
+  const shouldShow = tone === "error" && !!message;
+  ui.statusBanner.textContent = shouldShow ? message : "";
+  ui.statusBanner.className = `status${tone ? ` ${tone}` : ""}${shouldShow ? "" : " hidden"}`;
 }
 
 function readNature(bytes, format) {
@@ -709,10 +782,7 @@ function writeAbility(bytes, format, abilityId) {
 }
 
 function getDesiredLevel() {
-  const currentInput = Number.parseInt(ui.levelInput.value || "", 10);
-  const baseline = Number.isInteger(currentInput)
-    ? currentInput
-    : (appState.loadedFile?.parsed.level ?? EXPERIENCE_MIN_LEVEL);
+  const baseline = appState.loadedFile?.parsed.level ?? EXPERIENCE_MIN_LEVEL;
   return Math.max(baseline, getRequiredLevelForSelectedMoves());
 }
 
@@ -735,14 +805,14 @@ function getRequiredLevelForSelectedMoves() {
   return requiredLevel;
 }
 
-function syncLevelInputToRequiredMoves() {
+function updateSummaryLevel() {
   if (!appState.loadedFile) return;
-  const currentInput = Number.parseInt(ui.levelInput.value || "", 10);
-  const baseline = Number.isInteger(currentInput)
-    ? currentInput
-    : (appState.loadedFile.parsed.level ?? EXPERIENCE_MIN_LEVEL);
-  const requiredLevel = getRequiredLevelForSelectedMoves();
-  ui.levelInput.value = String(Math.max(baseline, requiredLevel));
+  const parsedLevel = appState.loadedFile.parsed.level ?? EXPERIENCE_MIN_LEVEL;
+  const desiredLevel = getDesiredLevel();
+  ui.pokemonLevel.textContent = desiredLevel > parsedLevel
+    ? `Level ${parsedLevel} -> ${desiredLevel}`
+    : `Level ${parsedLevel}`;
+  ui.pokemonLevel.classList.toggle("auto-raised", desiredLevel > parsedLevel);
 }
 
 function getGrowthRate(formatKey, speciesId, form) {
@@ -934,6 +1004,21 @@ function readU32(bytes, offset) {
     (bytes[offset + 2] << 16) |
     (bytes[offset + 3] << 24)
   ) >>> 0;
+}
+
+function clampPointsValue(value) {
+  const parsed = Number.parseInt(String(value ?? "").trim() || "0", 10);
+  if (Number.isNaN(parsed)) return 0;
+  return Math.max(0, Math.min(MAX_STAT_POINTS, parsed));
+}
+
+function pointsFromLegacyEv(value) {
+  const ev = Math.max(0, Math.min(252, Number.parseInt(String(value ?? "").trim() || "0", 10) || 0));
+  return Math.min(MAX_STAT_POINTS, Math.floor((ev + 4) / 8));
+}
+
+function legacyEvFromPoints(value) {
+  return POINT_TO_EV[clampPointsValue(value)] ?? 0;
 }
 
 function writeU32(bytes, offset, value) {

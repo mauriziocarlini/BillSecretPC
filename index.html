@@ -3,75 +3,71 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f172a" />
-    <meta name="description" content="Minimal PWA editor for PB7, PK8, PA8, PK9 and PA9 Pokemon files." />
+    <meta name="theme-color" content="#111215" />
+    <meta name="description" content="Bill's secret PC lets you load a pkmn file, train it, and export it back." />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./assets/icons/icon.svg" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>PyKHeX PWA</title>
+    <title>Bill's secret PC</title>
   </head>
   <body>
     <main class="app-shell">
       <section class="hero card">
-        <p class="eyebrow">PyKHeX PWA MVP</p>
-        <h1>Simple Pokemon file editor.</h1>
-        <p class="lede">
-          Load a supported Pokemon file and edit only
-          <strong>Level</strong>, <strong>EVs</strong>, <strong>Moves</strong>, <strong>Ability</strong> and
-          <strong>Nature</strong>.
-        </p>
+        <h1>Bill's secret PC</h1>
+        <p class="lede">Load a pkmn file, train it, profit</p>
         <label class="upload-zone" for="file-input">
           <input id="file-input" type="file" accept=".pb7,.pk8,.pa8,.pk9,.pa9" />
           <span class="upload-title">Tap to load a Pokemon file</span>
           <span class="upload-copy">Supported: LGPE, SWSH, PLA, SV and ZA.</span>
         </label>
-        <p id="status-banner" class="status" aria-live="polite">
-          Waiting for a file.
-        </p>
+        <p id="status-banner" class="status hidden" aria-live="polite"></p>
       </section>
 
       <section id="summary-card" class="card summary hidden" aria-live="polite">
         <p class="eyebrow">Pokemon detected</p>
-        <h2 id="pokemon-name">-</h2>
+        <div class="summary-headline">
+          <h2 id="pokemon-name">-</h2>
+          <p id="pokemon-level" class="pokemon-level">Level -</p>
+        </div>
       </section>
 
       <form id="editor-form" class="editor hidden" novalidate>
         <section class="card">
           <div class="section-head">
             <div>
-              <p class="eyebrow">EVs</p>
-              <h3>Quick spread</h3>
+              <p class="eyebrow">Stat Points</p>
+              <h3>SP spread</h3>
             </div>
             <div class="ev-total-wrap">
-              <span id="ev-total" class="ev-total">0 / 510</span>
+              <span id="ev-total" class="ev-total">0 / 66 SP</span>
             </div>
           </div>
 
           <div class="ev-grid">
             <label>
-              <span>HP</span>
-              <input data-ev-input="hp" type="number" min="0" max="252" step="1" inputmode="numeric" />
+              <span>HP <strong data-ev-value="hp">0</strong></span>
+              <input data-ev-input="hp" type="range" min="0" max="32" step="1" value="0" />
             </label>
             <label>
-              <span>Atk</span>
-              <input data-ev-input="atk" type="number" min="0" max="252" step="1" inputmode="numeric" />
+              <span>Atk <strong data-ev-value="atk">0</strong></span>
+              <input data-ev-input="atk" type="range" min="0" max="32" step="1" value="0" />
             </label>
             <label>
-              <span>Def</span>
-              <input data-ev-input="def" type="number" min="0" max="252" step="1" inputmode="numeric" />
+              <span>Def <strong data-ev-value="def">0</strong></span>
+              <input data-ev-input="def" type="range" min="0" max="32" step="1" value="0" />
             </label>
             <label>
-              <span>SpA</span>
-              <input data-ev-input="spa" type="number" min="0" max="252" step="1" inputmode="numeric" />
+              <span>SpA <strong data-ev-value="spa">0</strong></span>
+              <input data-ev-input="spa" type="range" min="0" max="32" step="1" value="0" />
             </label>
             <label>
-              <span>SpD</span>
-              <input data-ev-input="spd" type="number" min="0" max="252" step="1" inputmode="numeric" />
+              <span>SpD <strong data-ev-value="spd">0</strong></span>
+              <input data-ev-input="spd" type="range" min="0" max="32" step="1" value="0" />
             </label>
             <label>
-              <span>Spe</span>
-              <input data-ev-input="spe" type="number" min="0" max="252" step="1" inputmode="numeric" />
+              <span>Spe <strong data-ev-value="spe">0</strong></span>
+              <input data-ev-input="spe" type="range" min="0" max="32" step="1" value="0" />
             </label>
           </div>
         </section>
@@ -85,10 +81,6 @@
           </div>
 
           <div class="field-stack">
-            <label>
-              <span>Level</span>
-              <input id="level-input" type="number" min="1" max="100" step="1" inputmode="numeric" />
-            </label>
             <label>
               <span>Stat Nature</span>
               <select id="nature-select"></select>
@@ -126,14 +118,6 @@
               <select data-move-input="4"></select>
             </label>
           </div>
-        </section>
-
-        <section class="card notes">
-          <p class="eyebrow">MVP notes</p>
-          <p>
-            This prototype auto-detects supported formats and only edits the fields shown here.
-            Everything else in the file is preserved as-is.
-          </p>
         </section>
 
         <div class="action-bar">
