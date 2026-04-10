@@ -385,6 +385,7 @@ button:focus {
 }
 
 .update-link svg {
+  display: none;
   width: 15px;
   height: 15px;
   fill: none;
@@ -395,6 +396,7 @@ button:focus {
 }
 
 .update-link.busy svg {
+  display: block;
   animation: spin 900ms linear infinite;
 }
 
