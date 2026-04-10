@@ -197,7 +197,7 @@ const EXPERIENCE_MIN_LEVEL = 1;
 const EXPERIENCE_MAX_LEVEL = 100;
 const APP_VERSION = "20260410225340";
 const MAX_STAT_POINTS = 32;
-const MAX_TOTAL_STAT_POINTS = 66;
+const MAX_TOTAL_STAT_POINTS = 65;
 const MAX_TOTAL_LEGACY_EV = 510;
 const POINT_TO_EV = [0, 4, 12, 20, 28, 36, 44, 52, 60, 68, 76, 84, 92, 100, 108, 116, 124, 132, 140, 148, 156, 164, 172, 180, 188, 196, 204, 212, 220, 228, 236, 244, 252];
 
@@ -482,7 +482,7 @@ function fillForm(fileState) {
 function updateEvBadge() {
   const total = getEvTotal();
   const legacyTotal = getLegacyEvTotal();
-  ui.evTotal.textContent = `${total} / ${MAX_TOTAL_STAT_POINTS} SP • ${legacyTotal} / ${MAX_TOTAL_LEGACY_EV} EV`;
+  ui.evTotal.textContent = `${total} / ${MAX_TOTAL_STAT_POINTS} SP`;
   ui.evTotal.classList.toggle("error", legacyTotal > MAX_TOTAL_LEGACY_EV);
   Object.entries(ui.evInputs).forEach(([key, input]) => {
     ui.evValueLabels[key].textContent = String(clampPointsValue(input.value));
@@ -608,7 +608,14 @@ function syncSpSliders(changedKey = "") {
       if (key === changedKey) return sum;
       return sum + legacyEvFromPoints(current.value);
     }, 0);
-    const maxForChanged = getMaxPointsForRemainingLegacyEv(MAX_TOTAL_LEGACY_EV - otherLegacyTotal);
+    const otherPointTotal = Object.entries(ui.evInputs).reduce((sum, [key, current]) => {
+      if (key === changedKey) return sum;
+      return sum + clampPointsValue(current.value);
+    }, 0);
+    const maxForChanged = Math.min(
+      getMaxPointsForRemainingLegacyEv(MAX_TOTAL_LEGACY_EV - otherLegacyTotal),
+      Math.max(0, MAX_TOTAL_STAT_POINTS - otherPointTotal),
+    );
     if (clampPointsValue(input.value) > maxForChanged) {
       input.value = String(maxForChanged);
     }
@@ -619,7 +626,14 @@ function syncSpSliders(changedKey = "") {
       if (otherKey === key) return sum;
       return sum + legacyEvFromPoints(current.value);
     }, 0);
-    const maxForStat = getMaxPointsForRemainingLegacyEv(MAX_TOTAL_LEGACY_EV - otherLegacyTotal);
+    const otherPointTotal = Object.entries(ui.evInputs).reduce((sum, [otherKey, current]) => {
+      if (otherKey === key) return sum;
+      return sum + clampPointsValue(current.value);
+    }, 0);
+    const maxForStat = Math.min(
+      getMaxPointsForRemainingLegacyEv(MAX_TOTAL_LEGACY_EV - otherLegacyTotal),
+      Math.max(0, MAX_TOTAL_STAT_POINTS - otherPointTotal),
+    );
     if (clampPointsValue(input.value) > maxForStat) {
       input.value = String(maxForStat);
     }
