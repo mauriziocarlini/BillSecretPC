@@ -188,6 +188,7 @@ const NATURE_STATS = ["Atk", "Def", "Spe", "SpA", "SpD"];
 
 const EXPERIENCE_MIN_LEVEL = 1;
 const EXPERIENCE_MAX_LEVEL = 100;
+const APP_VERSION = "20260410225340";
 const MAX_STAT_POINTS = 32;
 const MAX_TOTAL_STAT_POINTS = 66;
 const MAX_TOTAL_LEGACY_EV = 510;
@@ -240,6 +241,7 @@ const appState = {
 
 const ui = {
   fileInput: document.querySelector("#file-input"),
+  appVersion: document.querySelector("#app-version"),
   summaryCard: document.querySelector("#summary-card"),
   editorForm: document.querySelector("#editor-form"),
   statusBanner: document.querySelector("#status-banner"),
@@ -313,6 +315,10 @@ async function loadDatasets() {
 }
 
 function buildStaticUI() {
+  if (ui.appVersion) {
+    ui.appVersion.textContent = formatAppVersion(APP_VERSION);
+  }
+
   ui.natureSelect.innerHTML = "";
   NATURES.forEach((name, index) => {
     const option = document.createElement("option");
@@ -1130,7 +1136,7 @@ function writeU32(bytes, offset, value) {
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   try {
-    const registration = await navigator.serviceWorker.register("./sw.js");
+    const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
     appState.serviceWorkerRegistration = registration;
     setupPwaUpdatePrompt(registration);
     registration.update().catch(() => {});
@@ -1152,27 +1158,37 @@ async function checkForPwaUpdate() {
   }
 
   ui.checkUpdateButton.disabled = true;
-  setUpdateLinkState("Checking");
+  setUpdateLinkState("Checking", { busy: true });
   try {
     if (registration.waiting) {
-      showUpdatePrompt(registration.waiting);
+      showUpdateAvailable(registration.waiting);
       return;
     }
 
+    const remoteVersion = await fetchRemoteVersion();
     await registration.update();
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
+    await new Promise((resolve) => window.setTimeout(resolve, remoteVersion && remoteVersion !== APP_VERSION ? 1800 : 700));
     const waitingWorker = appState.pendingUpdateWorker || registration.waiting;
     if (waitingWorker) {
-      showUpdatePrompt(waitingWorker);
+      showUpdateAvailable(waitingWorker);
+    } else if (remoteVersion && remoteVersion !== APP_VERSION) {
+      setUpdateLinkState("Update available", { available: true });
     } else {
-      setUpdateLinkState("Up to date", { resetAfter: true });
+      setUpdateLinkState("Up to date", { resetAfter: true, hideIcon: true });
     }
   } catch (error) {
     console.warn("Update check failed", error);
-    setUpdateLinkState("Update check failed", { resetAfter: true });
+    setUpdateLinkState("Update check failed", { resetAfter: true, hideIcon: true });
   } finally {
     if (!appState.pendingUpdateWorker) ui.checkUpdateButton.disabled = false;
   }
+}
+
+async function fetchRemoteVersion() {
+  const response = await fetch(`./version.json?ts=${Date.now()}`, { cache: "no-store" });
+  if (!response.ok) return null;
+  const versionInfo = await response.json();
+  return versionInfo.version || null;
 }
 
 function setupPwaUpdatePrompt(registration) {
@@ -1181,7 +1197,7 @@ function setupPwaUpdatePrompt(registration) {
 
   if (waitingWorker && navigator.serviceWorker.controller) {
     appState.pendingUpdateWorker = waitingWorker;
-    showUpdatePrompt(waitingWorker);
+    showUpdateAvailable(waitingWorker);
   }
 
   registration.addEventListener("updatefound", () => {
@@ -1191,7 +1207,7 @@ function setupPwaUpdatePrompt(registration) {
       if (installingWorker.state !== "installed" || !navigator.serviceWorker.controller) return;
       waitingWorker = installingWorker;
       appState.pendingUpdateWorker = waitingWorker;
-      showUpdatePrompt(waitingWorker);
+      showUpdateAvailable(waitingWorker);
     });
   });
 
@@ -1202,27 +1218,39 @@ function setupPwaUpdatePrompt(registration) {
   });
 }
 
-function showUpdatePrompt(worker) {
+function showUpdateAvailable(worker) {
   appState.pendingUpdateWorker = worker;
-  applyPwaUpdate(worker);
+  ui.checkUpdateButton.disabled = false;
+  setUpdateLinkState("Update available", { available: true });
 }
 
 function applyPwaUpdate(worker) {
   ui.checkUpdateButton.disabled = true;
-  setUpdateLinkState("Installing update", { available: true });
+  setUpdateLinkState("Installing update", { available: true, busy: true });
   worker.postMessage({ type: "SKIP_WAITING" });
 }
 
-function setUpdateLinkState(message, { available = false, resetAfter = false } = {}) {
+function setUpdateLinkState(message, { available = false, busy = false, hideIcon = false, resetAfter = false } = {}) {
   if (!ui.checkUpdateButton) return;
   ui.checkUpdateButton.querySelector("span").textContent = message;
   ui.checkUpdateButton.classList.toggle("available", available);
+  ui.checkUpdateButton.classList.toggle("busy", busy);
+  ui.checkUpdateButton.classList.toggle("hide-icon", hideIcon);
   if (resetAfter) {
     window.setTimeout(() => {
       if (!appState.pendingUpdateWorker) {
         ui.checkUpdateButton.querySelector("span").textContent = "Check for updates";
         ui.checkUpdateButton.classList.remove("available");
+        ui.checkUpdateButton.classList.remove("busy");
+        ui.checkUpdateButton.classList.remove("hide-icon");
       }
     }, 1800);
   }
+}
+
+function formatAppVersion(version) {
+  if (!/^\d{10,}$/.test(version)) return version;
+  const month = Number.parseInt(version.slice(4, 6), 10);
+  const day = Number.parseInt(version.slice(6, 8), 10);
+  return `${version.slice(2, 4)}.${month}.${day}`;
 }

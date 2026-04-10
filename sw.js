@@ -1,10 +1,11 @@
-const CACHE_NAME = "pykhex-pwa-v25";
+const CACHE_NAME = "pykhex-pwa-v32";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
+  "./version.json",
   "./assets/icons/icon.svg",
   "./assets/icons/icon-mask.svg",
   "./assets/data/species.json",
