@@ -650,7 +650,7 @@ function getLegalMoveEntries() {
     if (moveId) legalIds.add(moveId);
   }
 
-  return appState.moves.filter((entry) => legalIds.has(entry.id));
+  return sortMoveEntries(appState.moves.filter((entry) => legalIds.has(entry.id)));
 }
 
 function isLegalMoveId(moveId) {
@@ -693,7 +693,7 @@ function getConservativeMoveEntries() {
       appState.movesMap.get(moveId) || { id: moveId, key: String(moveId), name: `Unknown Move ${moveId}` },
     );
   }
-  return Array.from(entries.values()).sort((a, b) => a.id - b.id);
+  return sortMoveEntries(Array.from(entries.values()));
 }
 
 function getLegalAbilityIds() {
@@ -741,11 +741,19 @@ function renderAbilityOptions(selectedAbilityId = 0) {
 }
 
 function renderMoveOptions(entries) {
-  const rendered = entries
+  const rendered = sortMoveEntries(entries)
     .map((entry) => `<option value="${entry.id}">${formatDisplayLabel(entry)}</option>`)
     .join("");
   ui.moveInputs.forEach((input) => {
     input.innerHTML = rendered;
+  });
+}
+
+function sortMoveEntries(entries) {
+  return [...entries].sort((left, right) => {
+    if (left.id === 0) return -1;
+    if (right.id === 0) return 1;
+    return left.name.localeCompare(right.name, "en", { sensitivity: "base" });
   });
 }
 
