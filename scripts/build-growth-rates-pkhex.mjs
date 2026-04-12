@@ -10,14 +10,12 @@ const RESOURCE_BASE = "https://raw.githubusercontent.com/kwsch/PKHeX/master/PKHe
 const OUTPUT_PATH = path.join(rootDir, "assets", "data", "growth-rates-pkhex.json");
 
 const FORMAT_CONFIGS = [
-  { key: "pb7", personalFile: "personal_gg", personalSize: 0x54, formStatsOffset: 0x1c, formCountOffset: 0x20 },
-  { key: "pk8", personalFile: "personal_swsh", personalSize: 0xb0, formStatsOffset: 0x1e, formCountOffset: 0x20 },
-  { key: "pa8", personalFile: "personal_la", personalSize: 0xb0, formStatsOffset: 0x1e, formCountOffset: 0x20 },
-  { key: "pk9", personalFile: "personal_sv", personalSize: 0x50, formStatsOffset: 0x18, formCountOffset: 0x1a },
-  { key: "pa9", personalFile: "personal_za", personalSize: 0x50, formStatsOffset: 0x18, formCountOffset: 0x1a },
+  { key: "pb7", personalFile: "personal_gg", personalSize: 0x54, expGrowthOffset: 0x15, formStatsOffset: 0x1c, formCountOffset: 0x20 },
+  { key: "pk8", personalFile: "personal_swsh", personalSize: 0xb0, expGrowthOffset: 0x15, formStatsOffset: 0x1e, formCountOffset: 0x20 },
+  { key: "pa8", personalFile: "personal_la", personalSize: 0xb0, expGrowthOffset: 0x15, formStatsOffset: 0x1e, formCountOffset: 0x20 },
+  { key: "pk9", personalFile: "personal_sv", personalSize: 0x50, expGrowthOffset: 0x0f, formStatsOffset: 0x18, formCountOffset: 0x1a },
+  { key: "pa9", personalFile: "personal_za", personalSize: 0x50, expGrowthOffset: 0x0f, formStatsOffset: 0x18, formCountOffset: 0x1a },
 ];
-
-const EXP_GROWTH_OFFSET = 0x15;
 
 async function main() {
   const output = {};
@@ -37,7 +35,7 @@ async function buildFormatGrowthRates(format) {
   for (let species = 1; species < entries.length; species += 1) {
     const baseEntry = entries[species];
     if (!baseEntry) continue;
-    const baseGrowth = baseEntry[EXP_GROWTH_OFFSET];
+    const baseGrowth = baseEntry[format.expGrowthOffset];
     const formStatsIndex = readU16(baseEntry, format.formStatsOffset);
     const formCount = Math.max(baseEntry[format.formCountOffset] ?? 1, 1);
 
@@ -47,7 +45,7 @@ async function buildFormatGrowthRates(format) {
       const formIndex = formStatsIndex > 0 ? formStatsIndex + form - 1 : species;
       const formEntry = entries[formIndex];
       if (!formEntry) continue;
-      const formGrowth = formEntry[EXP_GROWTH_OFFSET];
+      const formGrowth = formEntry[format.expGrowthOffset];
       if (formGrowth !== baseGrowth) {
         result[`${species}:${form}`] = formGrowth;
       }

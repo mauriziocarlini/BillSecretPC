@@ -31,6 +31,7 @@ const FORMAT_CONFIGS = {
       move1PpUps: 0x66,
       nicknameTerminator: 0x58,
       otTerminator: 0xc8,
+      metLevel: 0xdd,
       statLevel: 0xec,
     },
   },
@@ -66,6 +67,7 @@ const FORMAT_CONFIGS = {
       move1PpUps: 0x7e,
       nicknameTerminator: 0x70,
       otTerminator: 0x110,
+      metLevel: 0x125,
       statLevel: 0x148,
     },
   },
@@ -101,6 +103,7 @@ const FORMAT_CONFIGS = {
       move1PpUps: 0x86,
       nicknameTerminator: 0x78,
       otTerminator: 0x128,
+      metLevel: 0x13d,
       statLevel: 0x168,
     },
   },
@@ -136,6 +139,7 @@ const FORMAT_CONFIGS = {
       move1PpUps: 0x7e,
       nicknameTerminator: 0x70,
       otTerminator: 0x110,
+      metLevel: 0x125,
       statLevel: 0x148,
     },
   },
@@ -171,6 +175,7 @@ const FORMAT_CONFIGS = {
       move1PpUps: 0x7e,
       nicknameTerminator: 0x70,
       otTerminator: 0x110,
+      metLevel: 0x125,
       statLevel: 0x148,
     },
   },
@@ -195,7 +200,7 @@ const NATURE_UI_ORDER = [
 
 const EXPERIENCE_MIN_LEVEL = 1;
 const EXPERIENCE_MAX_LEVEL = 100;
-const APP_VERSION = "20260410225340";
+const APP_VERSION = "20260412150110";
 const MAX_STAT_POINTS = 32;
 const MAX_TOTAL_STAT_POINTS = 65;
 const MAX_TOTAL_LEGACY_EV = 510;
@@ -529,7 +534,7 @@ function exportEditedFile() {
   output[format.offsets.evSpa] = evs.spa;
   output[format.offsets.evSpd] = evs.spd;
   output[format.offsets.evSpe] = evs.spe;
-  writeU32(output, format.offsets.exp, getExpForLevel(desiredLevel, appState.loadedFile.parsed.growthRate));
+  writeU32(output, format.offsets.exp, getDesiredExp(desiredLevel));
   if (format.offsets.statLevel != null && format.offsets.statLevel < output.length) {
     output[format.offsets.statLevel] = desiredLevel;
   }
@@ -823,11 +828,25 @@ function readCurrentLevel(bytes, format) {
   return bytes[statLevel];
 }
 
+function readMetLevel(bytes, format) {
+  const { metLevel } = format.offsets;
+  if (metLevel == null || metLevel >= bytes.length) return null;
+  return bytes[metLevel] & 0x7f;
+}
+
 function getLevelFromData(bytes, format, exp, growthRate) {
-  if (growthRate != null) {
-    return getLevelFromExp(exp, growthRate);
-  }
-  return readCurrentLevel(bytes, format) ?? EXPERIENCE_MIN_LEVEL;
+  const currentLevel = readCurrentLevel(bytes, format);
+  const expLevel = growthRate != null ? getLevelFromExp(exp, growthRate) : null;
+  const metLevel = readMetLevel(bytes, format);
+  return Math.max(currentLevel ?? 0, expLevel ?? 0, metLevel ?? 0, EXPERIENCE_MIN_LEVEL);
+}
+
+function getDesiredExp(desiredLevel) {
+  const parsed = appState.loadedFile?.parsed;
+  if (!parsed) return 0;
+  if (desiredLevel <= parsed.level) return parsed.exp;
+  const levelExp = getExpForLevel(desiredLevel, parsed.growthRate);
+  return Math.max(parsed.exp, levelExp);
 }
 
 function readForm(bytes, format) {
