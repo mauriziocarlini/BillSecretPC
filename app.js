@@ -191,6 +191,14 @@ const NATURES = [
 
 const NATURE_STATS = ["Atk", "Def", "Spe", "SpA", "SpD"];
 const NATURE_STAT_KEYS = ["atk", "def", "spe", "spa", "spd"];
+const STAT_LABELS = {
+  hp: "HP",
+  atk: "Atk",
+  def: "Def",
+  spa: "SpA",
+  spd: "SpD",
+  spe: "Spe",
+};
 const NATURE_UI_ORDER = [
   0, 1, 2, 3, 4,
   6, 5, 7, 8, 9,
@@ -519,14 +527,14 @@ function updateFinalStats() {
     if (!label) return;
 
     if (baseStat == null) {
-      label.textContent = "Final -";
+      label.textContent = `${STAT_LABELS[key]}: -`;
       label.title = parsed ? "Base stat data unavailable for this Pokemon." : "";
       return;
     }
 
     const points = clampPointsValue(ui.evInputs[key]?.value);
     const finalStat = calculateFinalStat(key, baseStat, points, getSelectedNatureId());
-    label.textContent = `Final ${finalStat}`;
+    label.textContent = `${STAT_LABELS[key]}: ${finalStat}`;
     label.title = `Base ${baseStat}, SP ${points}, Level ${FINAL_STAT_LEVEL}`;
   });
 }
