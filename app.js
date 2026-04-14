@@ -190,6 +190,7 @@ const NATURES = [
 ];
 
 const NATURE_STATS = ["Atk", "Def", "Spe", "SpA", "SpD"];
+const NATURE_STAT_KEYS = ["atk", "def", "spe", "spa", "spd"];
 const NATURE_UI_ORDER = [
   0, 1, 2, 3, 4,
   6, 5, 7, 8, 9,
@@ -200,7 +201,8 @@ const NATURE_UI_ORDER = [
 
 const EXPERIENCE_MIN_LEVEL = 1;
 const EXPERIENCE_MAX_LEVEL = 100;
-const APP_VERSION = "20260412150110";
+const APP_VERSION = "20260414120000";
+const FINAL_STAT_LEVEL = 50;
 const MAX_STAT_POINTS = 32;
 const MAX_TOTAL_STAT_POINTS = 65;
 const MAX_TOTAL_LEGACY_EV = 510;
@@ -241,6 +243,7 @@ const appState = {
   abilityLegality: null,
   growthRates: null,
   movePp: null,
+  baseStats: null,
   speciesMap: new Map(),
   movesMap: new Map(),
   abilitiesMap: new Map(),
@@ -275,6 +278,14 @@ const ui = {
     spd: document.querySelector('[data-ev-value="spd"]'),
     spe: document.querySelector('[data-ev-value="spe"]'),
   },
+  finalStatLabels: {
+    hp: document.querySelector('[data-final-stat="hp"]'),
+    atk: document.querySelector('[data-final-stat="atk"]'),
+    def: document.querySelector('[data-final-stat="def"]'),
+    spa: document.querySelector('[data-final-stat="spa"]'),
+    spd: document.querySelector('[data-final-stat="spd"]'),
+    spe: document.querySelector('[data-final-stat="spe"]'),
+  },
   evTotal: document.querySelector("#ev-total"),
   natureSelect: document.querySelector("#nature-select"),
   abilityInput: document.querySelector("#ability-input"),
@@ -301,7 +312,7 @@ async function bootstrap() {
 }
 
 async function loadDatasets() {
-  const [species, moves, abilities, moveLegality, abilityLegality, growthRates, movePp] = await Promise.all([
+  const [species, moves, abilities, moveLegality, abilityLegality, growthRates, movePp, baseStats] = await Promise.all([
     fetch("./assets/data/species.json").then((res) => res.json()),
     fetch("./assets/data/moves.json").then((res) => res.json()),
     fetch("./assets/data/abilities.json").then((res) => res.json()),
@@ -309,6 +320,7 @@ async function loadDatasets() {
     fetch("./assets/data/ability-legality-pkhex.json").then((res) => res.json()),
     fetch("./assets/data/growth-rates-pkhex.json").then((res) => res.json()),
     fetch("./assets/data/move-pp-pkhex.json").then((res) => res.json()),
+    fetch("./assets/data/base-stats.json").then((res) => res.json()),
   ]);
 
   appState.species = species;
@@ -318,6 +330,7 @@ async function loadDatasets() {
   appState.abilityLegality = abilityLegality;
   appState.growthRates = growthRates;
   appState.movePp = movePp;
+  appState.baseStats = baseStats;
   appState.speciesMap = new Map(species.map((entry) => [entry.id, entry]));
   appState.movesMap = new Map(appState.moves.map((entry) => [entry.id, entry]));
   appState.abilitiesMap = new Map(abilities.map((entry) => [entry.id, entry]));
@@ -361,6 +374,7 @@ function wireEvents() {
 
   ui.abilityInput.addEventListener("change", refreshSaveState);
   ui.natureSelect.addEventListener("change", refreshSaveState);
+  ui.natureSelect.addEventListener("change", updateFinalStats);
   ui.moveInputs.forEach((input) => input.addEventListener("change", () => {
     updateSummaryLevel();
     refreshSaveState();
@@ -492,6 +506,56 @@ function updateEvBadge() {
   Object.entries(ui.evInputs).forEach(([key, input]) => {
     ui.evValueLabels[key].textContent = String(clampPointsValue(input.value));
   });
+  updateFinalStats();
+}
+
+function updateFinalStats() {
+  const parsed = appState.loadedFile?.parsed;
+  const baseStats = parsed ? appState.baseStats?.[parsed.speciesId] : null;
+
+  Object.keys(ui.finalStatLabels).forEach((key) => {
+    const label = ui.finalStatLabels[key];
+    const baseStat = baseStats?.[key];
+    if (!label) return;
+
+    if (baseStat == null) {
+      label.textContent = "Final -";
+      label.title = parsed ? "Base stat data unavailable for this Pokemon." : "";
+      return;
+    }
+
+    const points = clampPointsValue(ui.evInputs[key]?.value);
+    const finalStat = calculateFinalStat(key, baseStat, points, getSelectedNatureId());
+    label.textContent = `Final ${finalStat}`;
+    label.title = `Base ${baseStat}, SP ${points}, Level ${FINAL_STAT_LEVEL}`;
+  });
+}
+
+function calculateFinalStat(key, baseStat, points, natureId) {
+  const baseValue = Math.floor(((2 * baseStat + 31) * FINAL_STAT_LEVEL) / 100);
+  if (key === "hp") {
+    return baseValue + FINAL_STAT_LEVEL + 10 + points;
+  }
+  return Math.floor((baseValue + 5 + points) * getNatureMultiplier(key, natureId));
+}
+
+function getNatureMultiplier(key, natureId) {
+  const statIndex = NATURE_STAT_KEYS.indexOf(key);
+  if (statIndex === -1 || !Number.isInteger(natureId) || natureId < 0 || natureId >= NATURES.length) {
+    return 1;
+  }
+
+  const increased = Math.floor(natureId / 5);
+  const decreased = natureId % 5;
+  if (increased === decreased) return 1;
+  if (increased === statIndex) return 1.1;
+  if (decreased === statIndex) return 0.9;
+  return 1;
+}
+
+function getSelectedNatureId() {
+  const natureId = Number.parseInt(ui.natureSelect.value, 10);
+  return Number.isNaN(natureId) ? null : natureId;
 }
 
 function refreshSaveState() {
