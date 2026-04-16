@@ -245,7 +245,7 @@ const NATURE_UI_ORDER = [
 
 const EXPERIENCE_MIN_LEVEL = 1;
 const EXPERIENCE_MAX_LEVEL = 100;
-const APP_VERSION = "20260416100000";
+const APP_VERSION = "20260416102500";
 const FINAL_STAT_LEVEL = 50;
 const MAX_STAT_POINTS = 32;
 const MAX_TOTAL_STAT_POINTS = 65;
@@ -933,18 +933,22 @@ function readNature(bytes, format) {
 function readCurrentLevel(bytes, format) {
   const { statLevel } = format.offsets;
   if (statLevel == null || statLevel >= bytes.length) return null;
-  return bytes[statLevel];
+  return normalizeLevelByte(bytes[statLevel]);
 }
 
 function readMetLevel(bytes, format) {
   const { metLevel } = format.offsets;
   if (metLevel == null || metLevel >= bytes.length) return null;
-  return bytes[metLevel] & 0x7f;
+  return normalizeLevelByte(bytes[metLevel] & 0x7f);
+}
+
+function normalizeLevelByte(value) {
+  return value >= EXPERIENCE_MIN_LEVEL && value <= EXPERIENCE_MAX_LEVEL ? value : null;
 }
 
 function getLevelFromData(bytes, format, exp, growthRate) {
   const currentLevel = readCurrentLevel(bytes, format);
-  const expLevel = growthRate != null ? getLevelFromExp(exp, growthRate) : null;
+  const expLevel = normalizeLevelByte(growthRate != null ? getLevelFromExp(exp, growthRate) : null);
   const metLevel = readMetLevel(bytes, format);
   return Math.max(currentLevel ?? 0, expLevel ?? 0, metLevel ?? 0, EXPERIENCE_MIN_LEVEL);
 }
@@ -984,22 +988,22 @@ function writeAbility(bytes, format, abilityId) {
 }
 
 function getDesiredLevel() {
-  const baseline = appState.loadedFile?.parsed.level ?? EXPERIENCE_MIN_LEVEL;
-  return Math.max(baseline, getRequiredLevelForSelectedMoves());
+  const baseline = normalizeLevelByte(appState.loadedFile?.parsed.level) ?? EXPERIENCE_MIN_LEVEL;
+  return normalizeLevelByte(Math.max(baseline, getRequiredLevelForSelectedMoves())) ?? baseline;
 }
 
 function getRequiredLevelForSelectedMoves() {
   if (!appState.loadedFile) return EXPERIENCE_MIN_LEVEL;
   const speciesData = getLegalityEntriesForCurrentPokemon();
-  if (!speciesData) return appState.loadedFile.parsed.level ?? EXPERIENCE_MIN_LEVEL;
+  if (!speciesData) return normalizeLevelByte(appState.loadedFile.parsed.level) ?? EXPERIENCE_MIN_LEVEL;
 
-  let requiredLevel = appState.loadedFile.parsed.level ?? EXPERIENCE_MIN_LEVEL;
+  let requiredLevel = normalizeLevelByte(appState.loadedFile.parsed.level) ?? EXPERIENCE_MIN_LEVEL;
   for (const input of ui.moveInputs) {
     const moveId = resolveMoveValue(input.value);
     if (moveId == null || moveId === 0) continue;
     for (const [legalMoveId, minLevel] of speciesData) {
       if (legalMoveId === moveId) {
-        requiredLevel = Math.max(requiredLevel, minLevel || EXPERIENCE_MIN_LEVEL);
+        requiredLevel = Math.max(requiredLevel, normalizeLevelByte(minLevel) ?? EXPERIENCE_MIN_LEVEL);
         break;
       }
     }

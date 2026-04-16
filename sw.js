@@ -1,4 +1,4 @@
-const CACHE_NAME = "pykhex-pwa-v49";
+const CACHE_NAME = "pykhex-pwa-v51";
 const CORE_ASSETS = [
   "./",
   "./index.html",
